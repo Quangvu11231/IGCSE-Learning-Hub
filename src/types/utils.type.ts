@@ -2,6 +2,8 @@ export interface ApiResponseType<T> {
   success: boolean;
   message: string;
   data: T;
+  statusCode: number;
+  status: number;
 }
 
 export interface ApiErrorResponseType {

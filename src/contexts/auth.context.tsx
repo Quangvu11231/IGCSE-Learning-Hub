@@ -6,10 +6,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authApi } from "../apis/auth.api";
+import { authApi } from "../apis/login.api";
 import type { LoginRequestType } from "../payload/request/auth.request";
 import type { IUser } from "../payload/response/auth.request";
 import { useMessage } from "./message.context";
+import { useNavigate } from "react-router-dom";
+import { HttpStatusCode } from "../constant/http-status-code";
+
 
 interface AuthContextType {
   user: IUser | null;
@@ -25,9 +28,11 @@ const defaultContext: AuthContextType = {
   loading: false,
   initialLoading: true,
   error: null,
-  login: async () => {},
-  logout: async () => {},
+  login: async () => { },
+  logout: async () => { },
 };
+
+
 const AuthContext = createContext<AuthContextType>(defaultContext);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -36,14 +41,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const { showMessage } = useMessage();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadUser = async () => {
       try {
         setInitialLoading(true);
-        const response = await authApi.me();
-        if (response.success) {
-          setUser(response.data);
+        const token = localStorage.getItem("token");
+        const userID = localStorage.getItem("userID");
+
+        // Nếu chưa login thì không cần gọi API
+        if (!token || !userID) {
+          setUser(null);
+          return;
+        }
+
+        // Gọi API profile
+        const profileRes = await authApi.getProfile(userID);
+        if (profileRes) {
+          setUser(profileRes);
         } else {
           setUser(null);
         }
@@ -54,18 +70,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setInitialLoading(false);
       }
     };
+
     loadUser();
   }, []);
+
+
   const login = useCallback(
     async (data: LoginRequestType) => {
       try {
         setLoading(true);
         setError(null);
         const response = await authApi.login(data);
-        if (response.success) {
-          // Save user data and token
-          setUser(response.data);
-          showMessage("success", response.message || "Login success");
+
+        if (response.statusCode === HttpStatusCode.OK) {
+          //lưu token và usedID
+          const token = response.data.token;
+          const userID = response.data.userID;
+
+          localStorage.setItem("token", token);
+          localStorage.setItem("userID", userID);
+
+          // Gọi profile API
+          const profileRes = await authApi.getProfile(userID);
+          console.log(">>>>>Profile data: ", profileRes);
+
+          if (profileRes) {
+            setUser(profileRes);
+            showMessage("success", response.message || "Login success");
+            navigate("/");
+          } else {
+            showMessage("error", "Cannot load profile");
+          }
+
+
         } else {
           showMessage("error", response.message || "Login failed");
         }
@@ -76,14 +113,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
       }
     },
-    [showMessage]
+    [showMessage, navigate]
   );
 
   const logout = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
+      //xóa token và userID
+      localStorage.removeItem("token");
+      localStorage.removeItem("userID");
+
+      //xóa user state
       setUser(null);
+
       showMessage("success", "Logout success");
     } catch (err: any) {
       setError(err.message || "Failed to logout");
@@ -92,6 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   }, [showMessage]);
+
   const value = {
     user,
     loading,

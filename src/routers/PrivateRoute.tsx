@@ -15,19 +15,25 @@ const PrivateRoute = ({
   redirectTo = "/login",
   loadingFallback = null,
 }: PrivateRouteProps) => {
-  const { user, initialLoading } = useAuth(); // Sử dụng initialLoading
+  const { user, initialLoading } = useAuth();
 
   // Hiển thị loading nếu đang kiểm tra auth lần đầu
   if (initialLoading) {
     return <>{loadingFallback}</>;
   }
 
+  const token = localStorage.getItem("token");
+  const isAuthenticated = !!(user || token);
+
   // Xử lý trang auth (login/register)
   if (isAuthPage) {
-    return user ? <Navigate to="/" replace /> : <>{children}</>;
+    // Nếu đã login -> redirect về trang chủ
+    return isAuthenticated ? <Navigate to="/" replace /> : <>{children}</>;
   }
 
   // Trang bình thường - yêu cầu đăng nhập
-  return user ? <>{children}</> : <Navigate to={redirectTo} replace />;
+  // Nếu CHƯA login -> redirect về trang login
+  return isAuthenticated ? <>{children}</> : <Navigate to={redirectTo} replace />;
 };
+
 export default PrivateRoute;
